@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QRectF, QPointF
+from company_data import load_companies, search_companies
 from PySide6.QtGui import (
     QColor, QPainter, QPen, QBrush, QFont,
     QLinearGradient, QPixmap
@@ -19,7 +20,7 @@ from PySide6.QtWidgets import (
 BASE = Path(__file__).resolve().parent
 PRICE_FILE = BASE / "stock_prices.csv"
 HOLDING_FILE = BASE / "portfolio_summary.csv"
-BG_FILE = BASE / "neon_background.png"
+BG_FILE = BASE / "anime_wallpaper.jpg"
 
 COLORS = {
     "bg": "#050923",
@@ -137,30 +138,6 @@ class NeonDonut(QWidget):
         p.setPen(QColor("#aab8e9"))
         p.drawText(QRectF(25, 130, 115, 20),
                    Qt.AlignmentFlag.AlignCenter, "HOLDINGS")
-class WallpaperWidget(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.wallpaper = QPixmap(str(BG_FILE))
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-
-        if not self.wallpaper.isNull():
-            scaled = self.wallpaper.scaled(
-                self.size(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation
-            )
-            x = (scaled.width() - self.width()) // 2
-            y = (scaled.height() - self.height()) // 2
-            painter.drawPixmap(
-                self.rect(), scaled,
-                QRectF(x, y, self.width(), self.height()).toRect()
-            )
-
-        painter.fillRect(self.rect(), QColor(3, 6, 30, 65))        
-
 
 class NeonWindow(QMainWindow):
     def __init__(self):
@@ -171,8 +148,17 @@ class NeonWindow(QMainWindow):
 
         self.prices = {}
         self.holdings = []
+        self.companies = {}
+
         self.load_prices()
         self.load_holdings()
+
+        try:
+            self.companies = load_companies()
+            print("S&P 500 companies loaded:", len(self.companies))
+        except (FileNotFoundError, ValueError) as error:
+            QMessageBox.warning(self, "Company Dataset", str(error))
+
         self.build_ui()
         self.refresh()
 
@@ -250,7 +236,7 @@ class NeonWindow(QMainWindow):
         return frame, layout
 
     def build_ui(self):
-        root = WallpaperWidget()
+        root = QWidget()
         root.setObjectName("root")
         self.setCentralWidget(root)
 
@@ -349,15 +335,45 @@ class NeonWindow(QMainWindow):
 
         self.stock_box = QComboBox()
         self.stock_box.setEditable(True)
+
         self.stock_box.setInsertPolicy(
             QComboBox.InsertPolicy.NoInsert
         )
-        self.stock_box.addItems([
-            f"{ticker}  —  {data['company']}"
-            for ticker, data in self.prices.items()
-        ])
-        self.stock_box.setMinimumWidth(300)
 
+        self.stock_box.setMinimumWidth(300)
+        self.stock_box.setMaxVisibleItems(15)
+
+        # Combine Indian demo stocks and S&P 500 companies
+        self.company_options = {}
+
+        for ticker, data in self.prices.items():
+            self.company_options[ticker] = {
+                "company": data["company"],
+                "source": "DEMO"
+            }
+
+        for ticker, data in self.companies.items():
+            if ticker not in self.company_options:
+                self.company_options[ticker] = {
+                    "company": data["company"],
+                    "source": "S&P 500"
+                }
+
+        # Populate dropdown
+        for ticker, data in sorted(self.company_options.items()):
+            label = (
+                f"{ticker} — {data['company']} "
+                f"[{data['source']}]"
+            )
+            self.stock_box.addItem(label, ticker)
+
+        # Enable autocomplete
+        self.stock_box.completer().setCaseSensitivity(
+            Qt.CaseSensitivity.CaseInsensitive
+        )
+        self.stock_box.completer().setFilterMode(
+            Qt.MatchFlag.MatchContains
+        )
         self.buy_price = QDoubleSpinBox()
         self.buy_price.setRange(0.01, 10000000)
         self.buy_price.setValue(1000)
@@ -530,19 +546,42 @@ class NeonWindow(QMainWindow):
         return box
 
     def selected_ticker(self):
-        text = self.stock_box.currentText().strip().upper()
+        text = self.stock_box.currentText().strip()
 
-        # Accept either ticker or company name
-        for ticker, data in self.prices.items():
-            if text == ticker or text == data["company"].upper():
-                return ticker
+        if not text:
+            return None
 
-        # Also accept text such as "INFY — Infosys"
-        for ticker, data in self.prices.items():
-            if text.startswith(ticker):
-                return ticker
-            if data["company"].upper() in text:
-                return ticker
+        # Check whether an actual dropdown item is selected
+        index = self.stock_box.currentIndex()
+
+        if (
+            index >= 0
+            and text == self.stock_box.itemText(index)
+        ):
+            selected = self.stock_box.itemData(index)
+
+            if selected in self.company_options:
+                return selected
+
+        # Handle ticker and company labels
+        if " — " in text:
+            text = text.split(" — ", 1)[0].strip()
+
+        query = text.strip().upper()
+
+        # Exact ticker match
+        if query in self.company_options:
+            return query
+
+        # Search company names
+        matches = [
+            ticker
+            for ticker, data in self.company_options.items()
+            if query in data["company"].upper()
+        ]
+
+        if len(matches) == 1:
+            return matches[0]
 
         return None
 
@@ -551,15 +590,30 @@ class NeonWindow(QMainWindow):
 
         if not ticker:
             QMessageBox.warning(
-                self, "Stock not found",
+                self,
+                "Stock not found",
                 "Choose a company from the dropdown list."
             )
             return
 
-        company = self.prices[ticker]["company"]
+        company = self.company_options[ticker]["company"]
         buy = self.buy_price.value()
         qty = self.quantity.value()
-        current = self.prices[ticker]["price"]
+
+        if buy <= 0 or qty <= 0:
+            QMessageBox.warning(
+                self,
+                "Invalid Input",
+                "Please enter a valid buy price and quantity."
+            )
+            return
+
+        # Use demo price when available.
+        # Otherwise, use entered buy price as a temporary value.
+        if ticker in self.prices:
+            current = self.prices[ticker]["price"]
+        else:
+            current = buy
 
         existing = next(
             (x for x in self.holdings if x["ticker"] == ticker),
@@ -569,11 +623,14 @@ class NeonWindow(QMainWindow):
         if existing:
             old_qty = existing["qty"]
             total_qty = old_qty + qty
+
             existing["buy"] = (
                 existing["buy"] * old_qty + buy * qty
             ) / total_qty
+
             existing["qty"] = total_qty
             existing["current"] = current
+
         else:
             self.holdings.append({
                 "ticker": ticker,
@@ -586,6 +643,11 @@ class NeonWindow(QMainWindow):
         self.save_holdings()
         self.refresh()
 
+        QMessageBox.information(
+            self,
+            "Success",
+            f"{company} added to your portfolio!"
+        )
     def remove_stock(self):
         row = self.table.currentRow()
         if row < 0 or row >= len(self.holdings):
