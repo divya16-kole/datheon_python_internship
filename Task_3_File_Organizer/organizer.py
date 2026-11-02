@@ -355,19 +355,57 @@ class FileOrganizer(QMainWindow):
                 errors += 1
                 self.add_log(f"ERROR: Could not inspect {entry.name}: {error}")
 
+        for category in self.counts:
+            category_folder = folder / category
+            category_entry = next(
+                (entry for entry in entries if entry.name == category),
+                None
+            )
+            if category_entry is None:
+                continue
+
+            try:
+                if not category_entry.is_dir(follow_symlinks=False):
+                    continue
+
+                with os.scandir(category_folder) as directory:
+                    self.counts[category] = sum(
+                        1
+                        for entry in directory
+                        if entry.is_file(follow_symlinks=False)
+                    )
+            except OSError as error:
+                errors += 1
+                self.add_log(
+                    f"ERROR: Cannot scan {category} folder: {error}"
+                )
+                continue
+
+            self.category_labels[category].setText(
+                str(self.counts[category])
+            )
+            if self.counts[category]:
+                self.add_log(
+                    f"ALREADY ORGANIZED: {category} contains "
+                    f"{self.counts[category]} file(s)."
+                )
+
+        already_organized = sum(self.counts.values())
         total = len(files)
 
         if total == 0:
-            self.add_log("No files found in this folder.")
+            self.add_log("No unorganized files found in this folder.")
             self.progress.setValue(100)
             self.summary.setText(
-                f"COMPLETED | Moved: 0 | Skipped: 0 | Errors: {errors}"
+                f"COMPLETED | Moved: 0 | Skipped: 0 | Errors: {errors} | "
+                f"Already organized: {already_organized}"
             )
             self.add_log("\n========== FINAL SUMMARY ==========")
             self.add_log("Total files scanned: 0")
             self.add_log("Successfully moved: 0")
             self.add_log("Skipped: 0")
             self.add_log(f"Errors: {errors}")
+            self.add_log(f"Already organized: {already_organized}")
             self.organize_btn.setEnabled(True)
             return
 
@@ -421,7 +459,8 @@ class FileOrganizer(QMainWindow):
 
         self.summary.setText(
             f"COMPLETED | Moved: {moved} | "
-            f"Skipped: {skipped} | Errors: {errors}"
+            f"Skipped: {skipped} | Errors: {errors} | "
+            f"Already organized: {already_organized}"
         )
 
         self.add_log("\n========== FINAL SUMMARY ==========")
@@ -429,6 +468,7 @@ class FileOrganizer(QMainWindow):
         self.add_log(f"Successfully moved: {moved}")
         self.add_log(f"Skipped: {skipped}")
         self.add_log(f"Errors: {errors}")
+        self.add_log(f"Already organized: {already_organized}")
 
         self.organize_btn.setEnabled(True)
 

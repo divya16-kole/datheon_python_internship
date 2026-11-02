@@ -17,6 +17,8 @@ py -3.14 organizer.py
 
 Select a folder and choose **Organize Files**. The activity log shows moved,
 skipped, and failed files; the final summary reports the scan totals.
+Existing files already inside category folders are counted separately from
+files moved during the current run.
 
 Use the same `py -3.14` launcher for both installation and running so the
 dependency is installed into the same Python environment that starts the app.

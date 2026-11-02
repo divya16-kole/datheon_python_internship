@@ -1,41 +1,29 @@
-Hangman Game – Datheon Python Internship
+# Datheon Python Programming Internship
 
-About the Project
+This repository contains three independent Python internship projects:
 
-Hangman is a Python-based word guessing game. The player tries to guess a hidden word one letter at a time within six incorrect attempts.
+## Task 1 - Hangman
 
-Features
+A word-guessing game with both console and Tkinter GUI versions.
 
-- Random word selection
-- Hidden word displayed using underscores
-- Tracks guessed letters
-- Prevents duplicate guesses from reducing attempts
-- ASCII gallows that updates after incorrect guesses
-- Win and game-over messages
-- Console and GUI versions
+- Console: run `python hangman.py` from `Task_1_Hangman`.
+- GUI: run `python hangman_gui.py` from `Task_1_Hangman`.
+- Dependency: Python 3; Tkinter is included with most standard Python installations.
+- See `Task_1_Hangman/README.md` for the original project details.
 
-Technologies Used
+## Task 2 - Portfolio Tracker
 
-- Python 3
-- "random" module
-- Basic Python programming concepts
+A PySide6 desktop portfolio tracker using the included sample company and stock-price CSV files.
 
-How to Run
+- Run `python portfolio.py` from `Task_2_Portfolio_Tracker`.
+- Dependency: PySide6 (`python -m pip install PySide6`).
+- See `Task_2_Portfolio_Tracker/README.md` for setup, features, and sample tickers.
 
-Console Version
+## Task 3 - File Organizer
 
-Open the terminal in the project folder and run:
+A PySide6 desktop utility that organizes files from a selected folder into categories.
 
-python hangman.py
+- See `Task_3_File_Organizer/README.md` for setup and usage.
+- Install the dependency from that folder with `python -m pip install -r requirements.txt`.
 
-GUI Version
-
-If the GUI version is implemented using Tkinter or another installed GUI library, run:
-
-python hangman_gui.py
-
-Internship Task
-
-Task 1 – Hangman Word Guessing Game
-
-Note: The console and GUI versions may have different features. Run each file to verify its requirements.
+Run each project from its own task directory so its data files and relative paths resolve correctly.

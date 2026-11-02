@@ -542,10 +542,7 @@ class HangmanApp:
                 relief="flat",
                 bd=0,
                 cursor="hand2",
-                # command=lambda ch=letter: self.guess(ch)
-                command=lambda ch=letter:
-                print("Clicked:",ch)
-
+                command=lambda ch=letter: self.guess(ch)
             )
 
             btn.grid(
